@@ -16,9 +16,9 @@ parser.add_argument("version", help="Dataset version", type=int, default=1)
 parser.add_argument("data_dir", help="Data directory")
 parser.add_argument("model_dir", help="Model directory")
 parser.add_argument("n_class", help="Number of classes", type=int, default=12)
-# parser.add_argument("low_res", help="Low resolution MFCC or not", type=bool, default=True)
 parser.add_argument('--low_res', help="Low resolution MFCC or not", action='store_true')
-parser.add_argument("--use_model", help="Used trained model or not", action='store_true')
+parser.add_argument("--use_model", help="Use trained model or not", action='store_true')
+parser.add_argument("--subset", help="Use the subset of test set when testing", action='store_false')
 args = parser.parse_args()
 
 version = args.version
@@ -27,6 +27,8 @@ model_dir = args.model_dir
 n_class = args.n_class
 low_res = args.low_res
 use_model = args.use_model
+subset = args.subset
+
 # Other parameters
 nhead = 8
 nhid = 256
@@ -155,5 +157,9 @@ with torch.no_grad():
         true = torch.argmax(y, 1)
         accuracy = torch.mean((pred == true).float())
         accuracies.append(accuracy)
+	
+	# Only run one batch 
+        if subset:
+                break
 
 print("Test accuracy: ", (sum(accuracies) / len(accuracies)).item())
