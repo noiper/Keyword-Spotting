@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+# This is my own work (fs2776).
+# It downloads and untar the data file.
+
 data=$1
 version=$2
 

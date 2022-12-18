@@ -1,3 +1,9 @@
+'''
+This file contains the implemantation of data training for a given setting of the task.
+It outputs the test accuracy at the end.
+This is modified from steps/pytorchnn/model.py. (fs2776)
+The original file contains the encoder and decoder. This model has an encoder, and the decoder is just a linear layer.
+'''
 import math
 import torch
 import torch.nn as nn

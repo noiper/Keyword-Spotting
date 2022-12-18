@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+# This is my own work (fs2776)
+# Decode all models
+
 . ./path.sh
 
 echo [1/12] Running 12-class classification on dataset v1 using low resolution MFCC features...

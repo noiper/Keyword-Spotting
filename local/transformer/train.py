@@ -1,15 +1,20 @@
+'''
+This file contains the implemantation of data training for a given setting of the task.
+It outputs the test accuracy at the end.
+This is my own work. (fs2776)
+'''
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 
 from transformer import TransformerModel
-from data import MFCCDataset, load_data
+from data import MFCCDataset, load_data, load_test
 
 import sys
 import argparse
 
-# Parameters
+# Parameter parsing
 script_name = sys.argv[0]
 parser = argparse.ArgumentParser(description="Perform classification on MFCCs and get the test accuracy.")
 parser.add_argument("version", help="Dataset version", type=int, default=1)
@@ -47,8 +52,30 @@ epochs=100
 patience=15
 batch_size = 32
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-if use_model:
-    device = torch.device("cpu")
+
+####################################################
+# This part is for fast decoding subset of test data
+if subset:
+    max_len = 98
+    test, label2num = load_test(version, data_dir, n_class)
+    test_dataset = MFCCDataset(test, max_len, n_feature, label2num, n_class)
+    test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=batch_size, num_workers = 0)
+    tf_model = TransformerModel(n_feature, n_class, nembed, nhead, nhid, nlayers, dropout, dropout_pe).to(device)
+    tf_model.load_state_dict(torch.load(model_dir, map_location = device))
+    accuracies = []
+    with torch.no_grad():
+        for (x,y) in test_dataloader:
+            (x, y) = (x.to(device).float(), y.to(device).float())
+
+            output = tf_model(x)
+            pred = torch.argmax(output, 1)
+            true = torch.argmax(y, 1)
+            accuracy = torch.mean((pred == true).float())
+            accuracies.append(accuracy)
+
+    print("Test accuracy: ", (sum(accuracies) / len(accuracies)).item())
+    exit(0)
+####################################################
 
 # Load data and get max sequnce length
 train, validation, test, label2num = load_data(version, data_dir, n_class)
@@ -73,7 +100,8 @@ for _, val in test.items():
 
 num2label = {v: k for k, v in label2num.items()}
 
-# Training
+# Training or validating. Return loss and accuracy
+# No back-propagation for validating
 def run_one_epoch(train_flag, dataloader, model, optimizer, device):
 
     torch.set_grad_enabled(train_flag)
@@ -101,7 +129,6 @@ def run_one_epoch(train_flag, dataloader, model, optimizer, device):
     return(np.mean(losses), np.mean(accuracies))
 
 def train_model(model, train_data, validation_data, device, epochs=100, patience=10, verbose = True):
-    device = "cpu"
     model.to(device)
 
     train_dataset = MFCCDataset(train_data, max_len, n_feature, label2num, n_class)
@@ -121,12 +148,14 @@ def train_model(model, train_data, validation_data, device, epochs=100, patience
         val_loss, val_acc = run_one_epoch(False, validation_dataloader, model, optimizer, device)
         train_accs.append(train_acc)
         val_accs.append(val_acc)
+        # Reset patience counter and save the model when validation loss gets smaller
         if val_loss < best_val_loss: 
             best_val_loss = val_loss
             patience_counter = patience
             torch.save(model.state_dict(), check_point_filename)
         else: 
             patience_counter -= 1
+            # Early stopping
             if patience_counter <= 0: 
                 model.load_state_dict(torch.load(check_point_filename))
                 break
@@ -135,7 +164,6 @@ def train_model(model, train_data, validation_data, device, epochs=100, patience
           (e+1, train_loss, train_acc, val_loss, val_acc, patience_counter ))
 
     return model, train_accs, val_accs
-
 
 tf_model = TransformerModel(n_feature, n_class, nembed, nhead, nhid, nlayers, dropout, dropout_pe).to(device)
 if use_model:
@@ -146,7 +174,6 @@ else:
 # Test
 test_dataset = MFCCDataset(test, max_len, n_feature, label2num, n_class)
 test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=batch_size, num_workers = 0)
-device = 'cpu'
 accuracies = []
 with torch.no_grad():
     for (x,y) in test_dataloader:
@@ -157,9 +184,5 @@ with torch.no_grad():
         true = torch.argmax(y, 1)
         accuracy = torch.mean((pred == true).float())
         accuracies.append(accuracy)
-	
-	# Only run one batch 
-        if subset:
-                break
 
 print("Test accuracy: ", (sum(accuracies) / len(accuracies)).item())
